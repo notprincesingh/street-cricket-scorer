@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Street Cricket Scorer Pro</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: { slate950: '#0f172a', accentBlue: '#2563eb', accentGreen: '#22c55e' },
+          animation: { 'pulse-green': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite', 'spin-slow': 'spin 4s linear infinite', 'float': 'float 3s ease-in-out infinite' },
+          keyframes: { float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-15px)' } } }
+        },
+      },
+    }
+  </script>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body { background-color: #0f172a; color: white; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .trophy-cup { width: 60px; height: 50px; background: gold; border-radius: 0 0 30px 30px; position: relative; border: 4px solid #b8860b; margin: 0 auto; }
+    .trophy-cup::before, .trophy-cup::after { content: ''; position: absolute; width: 20px; height: 30px; border: 4px solid gold; top: 0; border-radius: 50%; }
+    .trophy-cup::before { left: -22px; } .trophy-cup::after { right: -22px; }
+  </style>
+</head>
+<body class="dark bg-slate950 min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/javascript">
+    const { useState, useEffect, useRef } = React;
+
+    // Register Service Worker for PWA functionality
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js'); });
+    }
+
+    function App() {
+      const [careerStats, setCareerStats] = useState(() => JSON.parse(localStorage.getItem('careerStats') || '{}'));
+      const [teamAPlayers, setTeamAPlayers] = useState(["", "", ""]);
+      const [teamBPlayers, setTeamBPlayers] = useState(["", "", ""]);
+      const [matchStarted, setMatchStarted] = useState(false);
+      const [innings, setInnings] = useState(1);
+      const [inningsData, setInningsData] = useState([createEmptyInnings(), createEmptyInnings(), createEmptyInnings(), createEmptyInnings()]);
+      const [currentBallInOver, setCurrentBallInOver] = useState(0);
+      const [strikerIndex, setStrikerIndex] = useState(0);
+      const [nonStrikerIndex, setNonStrikerIndex] = useState(1);
+      const [currentBowlerIndex, setCurrentBowlerIndex] = useState(0);
+      const [battingTeam, setBattingTeam] = useState('A');
+      const [logs, setLogs] = useState([]);
+      const [matchEnded, setMatchEnded] = useState(false);
+      const [wicketModal, setWicketModal] = useState(null); // { type: 'Caught' }
+
+      useEffect(() => { localStorage.setItem('careerStats', JSON.stringify(careerStats)); }, [careerStats]);
+
+      function createEmptyInnings() {
+        return { runs: 0, wickets: 0, overs: 0, balls: [], batsmanStats: Array(3).fill(0).map(() => ({ runs: 0, balls: 0, isOut: false, dismissal: "" })) };
+      }
+
+      function onBall(runs, isWkt = false, extra = null, wktDetail = "") {
+        let newInningsData = [...inningsData];
+        let curr = newInningsData[innings - 1];
+        let s = curr.batsmanStats[strikerIndex];
+
+        if (extra) {
+          curr.runs += (runs + 1);
+          setLogs([extra, ...logs]);
+        } else if (isWkt) {
+          curr.wickets++;
+          s.isOut = true; s.balls++; s.dismissal = wktDetail;
+          setLogs(["W", ...logs]);
+          if (curr.wickets < 2) {
+             const nextIdx = [0, 1, 2].find(i => i !== strikerIndex && i !== nonStrikerIndex);
+             setStrikerIndex(nextIdx);
+          }
+        } else {
+          curr.runs += runs; s.runs += runs; s.balls++;
+          setLogs([runs || '•', ...logs]);
+          if (runs % 2 !== 0) { const temp = strikerIndex; setStrikerIndex(nonStrikerIndex); setNonStrikerIndex(temp); }
+        }
+
+        if (!extra) {
+          const nextBall = currentBallInOver + 1;
+          if (nextBall === 6) {
+            curr.overs++; setCurrentBallInOver(0);
+            const temp = strikerIndex; setStrikerIndex(nonStrikerIndex); setNonStrikerIndex(temp);
+            alert("Over complete! Swap ends.");
+          } else { setCurrentBallInOver(nextBall); }
+        }
+
+        setInningsData(newInningsData);
+        checkInningsEnd(curr);
+      }
+
+      function checkInningsEnd(curr) {
+        if (curr.wickets >= 2 || curr.overs >= 15) {
+          if (innings < 4) {
+            setInnings(innings + 1); setBattingTeam(battingTeam === 'A' ? 'B' : 'A');
+            setStrikerIndex(0); setNonStrikerIndex(1); setCurrentBallInOver(0); setLogs([]);
+          } else { setMatchEnded(true); confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } }); }
+        }
+      }
+
+      if (!matchStarted) {
+        return (
+          <div className="p-6 max-w-md mx-auto">
+            <h1 className="text-3xl font-black text-blue-500 mb-8 uppercase text-center">Street Cricket Pro</h1>
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="glass p-4 rounded-2xl">
+                <input className="w-full bg-transparent border-b border-blue-500 mb-4 text-xs font-bold outline-none" placeholder="TEAM A NAME" onChange={e => setTeamAName(e.target.value)} />
+                {teamAPlayers.map((p, i) => <input key={i} className="w-full bg-transparent border-b border-white/10 mb-2 text-[10px] outline-none" placeholder={`Player ${i+1}`} onChange={e => { let x = [...teamAPlayers]; x[i] = e.target.value; setTeamAPlayers(x); }} />)}
+              </div>
+              <div className="glass p-4 rounded-2xl">
+                <input className="w-full bg-transparent border-b border-red-500 mb-4 text-xs font-bold outline-none" placeholder="TEAM B NAME" onChange={e => setTeamBName(e.target.value)} />
+                {teamBPlayers.map((p, i) => <input key={i} className="w-full bg-transparent border-b border-white/10 mb-2 text-[10px] outline-none" placeholder={`Player ${i+1}`} onChange={e => { let x = [...teamBPlayers]; x[i] = e.target.value; setTeamBPlayers(x); }} />)}
+              </div>
+            </div>
+            <button onClick={() => setMatchStarted(true)} className="w-full bg-accentBlue py-4 rounded-2xl font-black uppercase shadow-lg">Start Match</button>
+          </div>
+        );
+      }
+
+      if (matchEnded) {
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-10 text-center">
+            <div className="animate-float mb-6"><div className="trophy-cup"></div><div className="w-10 h-2 bg-yellow-800 mx-auto rounded"></div></div>
+            <h1 className="text-5xl font-black mb-4 uppercase italic">Match Over</h1>
+            <button onClick={() => window.location.reload()} className="bg-blue-600 px-10 py-4 rounded-full font-black uppercase">New Match</button>
+          </div>
+        );
+      }
+
+      const batPlayers = battingTeam === 'A' ? teamAPlayers : teamBPlayers;
+      const curr = inningsData[innings - 1];
+
+      return (
+        <div className="max-w-md mx-auto p-4">
+          <div className="glass p-6 rounded-3xl mb-4 flex justify-between items-end shadow-2xl">
+            <div><p className="text-[10px] text-accentBlue font-bold uppercase">{battingTeam === 'A' ? 'Team A' : 'Team B'} Batting</p><h1 className="text-6xl font-black">{curr.runs}-{curr.wickets}</h1></div>
+            <div className="text-right"><p className="text-[10px] opacity-40 uppercase font-bold">Overs</p><p className="text-3xl font-mono">{curr.overs}.{currentBallInOver}</p></div>
+          </div>
+
+          {wicketModal && (
+            <div className="fixed inset-0 bg-black/95 z-50 p-8 flex flex-col items-center">
+              <h3 className="text-2xl font-black mb-10 text-red-500 uppercase">Wicket Type</h3>
+              <div className="grid grid-cols-2 gap-4 w-full mb-10">
+                {['Bowled', 'Caught', 'Run Out', 'LBW'].map(t => <button key={t} onClick={() => setWicketModal({ type: t })} className={`p-4 rounded-xl font-bold border ${wicketModal.type === t ? 'bg-red-600' : 'glass'}`}>{t}</button>)}
+              </div>
+              {(wicketModal.type === 'Caught' || wicketModal.type === 'Run Out') && (
+                <div className="w-full grid grid-cols-2 gap-2">
+                  {[...teamAPlayers, ...teamBPlayers].filter(n => n && n !== batPlayers[strikerIndex] && n !== batPlayers[nonStrikerIndex]).map(name => (
+                    <button key={name} onClick={() => { onBall(0, true, null, `${wicketModal.type} by ${name}`); setWicketModal(null); }} className="glass p-3 rounded-lg text-xs font-bold">{name}</button>
+                  ))}
+                </div>
+              )}
+              {wicketModal.type && !['Caught', 'Run Out'].includes(wicketModal.type) && <button onClick={() => { onBall(0, true, null, wicketModal.type); setWicketModal(null); }} className="w-full bg-red-600 py-4 rounded-xl font-black">Confirm</button>}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4 mb-6">
+             <div className={`glass p-4 rounded-2xl ${true ? 'active-striker' : ''}`}>
+                <p className="text-[10px] text-accentGreen font-bold uppercase">Striker 🏏</p>
+                <h2 className="text-xl font-black">{batPlayers[strikerIndex]}</h2>
+                <p className="text-2xl font-black">{curr.batsmanStats[strikerIndex].runs} <span className="text-xs opacity-40">({curr.batsmanStats[strikerIndex].balls})</span></p>
+             </div>
+             <div className="glass p-4 rounded-2xl opacity-60">
+                <p className="text-[10px] font-bold uppercase">Non-Striker</p>
+                <h2 className="text-xl font-bold">{batPlayers[nonStrikerIndex]}</h2>
+                <p className="text-2xl font-bold">{curr.batsmanStats[nonStrikerIndex].runs}</p>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2 mb-2">
+            {[0, 1, 2, 3, 4, 6].map(r => <button key={r} onClick={() => onBall(r)} className="bg-accentBlue h-12 rounded-xl font-black tap-target">{r}</button>)}
+            <button onClick={() => setWicketModal({})} className="bg-red-600 h-12 rounded-xl font-black col-span-2">WICKET</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => onBall(0, false, 'WD')} className="glass h-12 rounded-xl font-bold">WIDE</button>
+            <button onClick={() => onBall(0, false, 'NB')} className="glass h-12 rounded-xl font-bold">NO BALL</button>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
