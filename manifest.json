@@ -3,9 +3,8 @@
   "short_name": "CricketScorer",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#0f172a",
+  "background_color": "#ffffff",
   "theme_color": "#2563eb",
-  "description": "A PWA app for street cricket scoring with career stats, innings, extras, PDF export, and more.",
   "icons": [
     {
       "src": "icons/icon-192.png",
