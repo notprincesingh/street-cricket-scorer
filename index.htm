@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Street Cricket Scorer</title>
 
+<!-- version: 2026-01-04 -->
+
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -16,40 +18,56 @@
 
 <script type="text/babel">
 function App() {
-  /* ===== SETUP ===== */
-  const [screen, setScreen] = React.useState("setup");
 
+  /* ================= MATCH RULES ================= */
+  const MAX_OVERS = 15;
+  const MAX_BALLS = MAX_OVERS * 6; // 90
+  const MAX_WICKETS = 2;
+
+  /* ================= CORE ================= */
+  const [screen, setScreen] = React.useState("setup");
+  const [day, setDay] = React.useState(1);
+  const [dayEnded, setDayEnded] = React.useState(false);
+
+  /* ================= TEAMS ================= */
   const [teamA, setTeamA] = React.useState("Team A");
   const [teamB, setTeamB] = React.useState("Team B");
   const [squadA, setSquadA] = React.useState(["","",""]);
   const [squadB, setSquadB] = React.useState(["","",""]);
 
-  /* ===== TOSS ===== */
+  /* ================= TOSS ================= */
   const [tossWinner, setTossWinner] = React.useState(null);
   const [tossDecision, setTossDecision] = React.useState(null);
-
-  /* ===== PLAYERS ===== */
   const [battingTeam, setBattingTeam] = React.useState(null);
   const [bowlingTeam, setBowlingTeam] = React.useState(null);
+
+  /* ================= INNINGS ================= */
+  const [innings, setInnings] = React.useState(1);
+  const [firstInningsScore, setFirstInningsScore] = React.useState(null);
+
+  /* ================= SCORE ================= */
+  const [runs, setRuns] = React.useState(0);
+  const [balls, setBalls] = React.useState(0);
+  const [wickets, setWickets] = React.useState(0);
 
   const [striker, setStriker] = React.useState("");
   const [nonStriker, setNonStriker] = React.useState("");
   const [bowler, setBowler] = React.useState("");
 
-  /* ===== MATCH ===== */
-  const [runs, setRuns] = React.useState(0);
-  const [balls, setBalls] = React.useState(0);
-  const [wickets, setWickets] = React.useState(0);
-
-  /* ===== MODALS ===== */
-  const [showWicket, setShowWicket] = React.useState(false);
-  const [wicketType, setWicketType] = React.useState(null);
+  /* ================= MATCH END ================= */
+  const [matchEnded, setMatchEnded] = React.useState(false);
+  const [resultText, setResultText] = React.useState("");
 
   const overs = `${Math.floor(balls/6)}.${balls%6}`;
 
+  /* ================= HELPERS ================= */
+  function swapStrike() {
+    setStriker(nonStriker);
+    setNonStriker(striker);
+  }
+
   function doToss() {
-    const winner = Math.random() < 0.5 ? teamA : teamB;
-    setTossWinner(winner);
+    setTossWinner(Math.random() < 0.5 ? teamA : teamB);
   }
 
   function decide(choice) {
@@ -63,33 +81,98 @@ function App() {
     }
   }
 
-  function startMatch() {
-    setScreen("scoring");
-  }
-
+  /* ================= SCORING ================= */
   function scoreRun(r) {
-    setRuns(runs + r);
-    setBalls(balls + 1);
-    if (r % 2 === 1) {
-      setStriker(nonStriker);
-      setNonStriker(striker);
+    if (dayEnded || matchEnded) return;
+    if (balls >= MAX_BALLS) return;
+    if (wickets >= MAX_WICKETS) return;
+
+    const newRuns = runs + r;
+    const newBalls = balls + 1;
+
+    setRuns(newRuns);
+    setBalls(newBalls);
+
+    if (r % 2 === 1) swapStrike();
+
+    if (newBalls % 6 === 0) swapStrike();
+
+    // Chase completed
+    if (innings === 2 && newRuns > firstInningsScore) {
+      decideResult(newRuns);
+    }
+
+    // Overs completed
+    if (newBalls >= MAX_BALLS) {
+      endInnings();
     }
   }
 
-  function recordWicket(detail) {
-    setWickets(wickets + 1);
-    setBalls(balls + 1);
-    alert(`Wicket: ${detail}`);
+  function wicket() {
+    if (dayEnded || matchEnded) return;
+    if (wickets >= MAX_WICKETS) return;
+
+    const newWickets = wickets + 1;
+    const newBalls = balls + 1;
+
+    setWickets(newWickets);
+    setBalls(newBalls);
     setStriker("New Batsman");
-    setShowWicket(false);
+
+    if (newWickets >= MAX_WICKETS) {
+      endInnings();
+    }
   }
 
-  /* ===== SETUP SCREEN ===== */
+  /* ================= INNINGS END ================= */
+  function endInnings() {
+    setDayEnded(true);
+
+    if (innings === 1) {
+      setFirstInningsScore(runs);
+
+      setTimeout(() => {
+        setInnings(2);
+        setRuns(0);
+        setBalls(0);
+        setWickets(0);
+        setDayEnded(false);
+
+        // Swap teams
+        setBattingTeam(bowlingTeam);
+        setBowlingTeam(battingTeam);
+
+        const nextBat = bowlingTeam === teamA ? squadA : squadB;
+        const nextBowl = battingTeam === teamA ? squadA : squadB;
+
+        setStriker(nextBat[0]);
+        setNonStriker(nextBat[1]);
+        setBowler(nextBowl[0]);
+      }, 500);
+
+    } else {
+      decideResult(runs);
+    }
+  }
+
+  /* ================= RESULT ================= */
+  function decideResult(finalRuns) {
+    setMatchEnded(true);
+
+    if (finalRuns > firstInningsScore) {
+      setResultText(`${battingTeam} won the match`);
+    } else if (finalRuns < firstInningsScore) {
+      setResultText(`${bowlingTeam} won the match`);
+    } else {
+      setResultText("Match Drawn");
+    }
+  }
+
+  /* ================= SETUP ================= */
   if (screen === "setup") {
     return (
       <div className="min-h-screen flex justify-center">
         <div className="w-full max-w-md bg-white p-4 space-y-4">
-
           <h1 className="text-xl font-bold text-center">Match Setup</h1>
 
           <input className="border p-2 w-full" value={teamA} onChange={e=>setTeamA(e.target.value)} />
@@ -97,9 +180,7 @@ function App() {
             <input key={i} className="border p-2 w-full"
               placeholder={`Team A Player ${i+1}`}
               value={p}
-              onChange={e=>{
-                const c=[...squadA]; c[i]=e.target.value; setSquadA(c);
-              }} />
+              onChange={e=>{const c=[...squadA];c[i]=e.target.value;setSquadA(c);}} />
           ))}
 
           <input className="border p-2 w-full" value={teamB} onChange={e=>setTeamB(e.target.value)} />
@@ -107,76 +188,61 @@ function App() {
             <input key={i} className="border p-2 w-full"
               placeholder={`Team B Player ${i+1}`}
               value={p}
-              onChange={e=>{
-                const c=[...squadB]; c[i]=e.target.value; setSquadB(c);
-              }} />
+              onChange={e=>{const c=[...squadB];c[i]=e.target.value;setSquadB(c);}} />
           ))}
 
           {!tossWinner && (
-            <button onClick={doToss}
-              className="w-full bg-blue-600 text-white py-2">
+            <button onClick={doToss} className="w-full bg-blue-600 text-white py-2">
               Toss
             </button>
           )}
 
           {tossWinner && !tossDecision && (
-            <div>
-              <p className="text-center font-semibold mb-2">
-                {tossWinner} won the toss
-              </p>
-              <button onClick={()=>decide("Bat")}
-                className="w-full bg-green-600 text-white py-2 mb-2">
-                Bat
-              </button>
-              <button onClick={()=>decide("Bowl")}
-                className="w-full bg-red-600 text-white py-2">
-                Bowl
-              </button>
-            </div>
+            <>
+              <p className="text-center font-semibold">{tossWinner} won the toss</p>
+              <button onClick={()=>decide("Bat")} className="w-full bg-green-600 text-white py-2">Bat</button>
+              <button onClick={()=>decide("Bowl")} className="w-full bg-red-600 text-white py-2">Bowl</button>
+            </>
           )}
 
           {battingTeam && (
-            <div className="space-y-2">
+            <>
               <select className="border p-2 w-full" onChange={e=>setStriker(e.target.value)}>
                 <option>Select Striker</option>
-                {(battingTeam===teamA?squadA:squadB).map(p=>(
-                  <option key={p}>{p}</option>
-                ))}
+                {(battingTeam===teamA?squadA:squadB).map(p=><option key={p}>{p}</option>)}
               </select>
 
               <select className="border p-2 w-full" onChange={e=>setNonStriker(e.target.value)}>
                 <option>Select Non-Striker</option>
-                {(battingTeam===teamA?squadA:squadB).filter(p=>p!==striker).map(p=>(
-                  <option key={p}>{p}</option>
-                ))}
+                {(battingTeam===teamA?squadA:squadB).filter(p=>p!==striker).map(p=><option key={p}>{p}</option>)}
               </select>
 
               <select className="border p-2 w-full" onChange={e=>setBowler(e.target.value)}>
                 <option>Select Bowler</option>
-                {(bowlingTeam===teamA?squadA:squadB).map(p=>(
-                  <option key={p}>{p}</option>
-                ))}
+                {(bowlingTeam===teamA?squadA:squadB).map(p=><option key={p}>{p}</option>)}
               </select>
 
-              <button onClick={startMatch}
+              <button onClick={()=>setScreen("scoring")}
                 className="w-full bg-teal-600 text-white py-2">
                 Start Match
               </button>
-            </div>
+            </>
           )}
-
         </div>
       </div>
     );
   }
 
-  /* ===== SCORING ===== */
+  /* ================= SCORING ================= */
   return (
     <div className="min-h-screen bg-black text-white flex justify-center">
       <div className="w-full max-w-md">
 
         <div className="bg-red-600 p-3 text-center">
-          {battingTeam} Batting
+          Day {day} · Innings {innings}
+          {innings === 2 && firstInningsScore !== null && (
+            <div className="text-sm">Target {firstInningsScore + 1}</div>
+          )}
         </div>
 
         <div className="p-4 text-center bg-gray-900">
@@ -192,39 +258,35 @@ function App() {
 
         <div className="grid grid-cols-3 bg-white text-black">
           {[0,1,2,3,4,6].map(r=>(
-            <button key={r} onClick={()=>scoreRun(r)}
-              className="py-6 border text-xl font-bold">
+            <button key={r}
+              disabled={dayEnded || matchEnded}
+              onClick={()=>scoreRun(r)}
+              className="py-6 border text-xl font-bold disabled:bg-gray-300">
               {r===4?"FOUR":r===6?"SIX":r}
             </button>
           ))}
-          <button onClick={()=>setShowWicket(true)}
-            className="py-6 border bg-red-500 text-white">
+          <button disabled={dayEnded || matchEnded}
+            onClick={wicket}
+            className="py-6 border bg-red-500 text-white disabled:bg-gray-400">
             OUT
           </button>
         </div>
 
-        {showWicket && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
-            <div className="bg-white p-4 space-y-2 text-black">
-              <button onClick={()=>recordWicket("Bowled")}
-                className="w-full border py-2">Bowled</button>
-              <button onClick={()=>setWicketType("Caught")}
-                className="w-full border py-2">Caught</button>
-              <button onClick={()=>setWicketType("Run Out")}
-                className="w-full border py-2">Run Out</button>
+        {!dayEnded && !matchEnded ? (
+          <button onClick={()=>setDayEnded(true)}
+            className="w-full py-3 bg-yellow-600 font-semibold">
+            End Day
+          </button>
+        ) : dayEnded && !matchEnded ? (
+          <button onClick={()=>{setDay(day+1);setDayEnded(false);}}
+            className="w-full py-3 bg-green-600 font-semibold">
+            Start Day {day+1}
+          </button>
+        ) : null}
 
-              {wicketType && (
-                <select className="border p-2 w-full"
-                  onChange={e=>recordWicket(`${wicketType} by ${e.target.value}`)}>
-                  <option>Select Fielder</option>
-                  {(bowlingTeam===teamA?squadA:squadB).filter(
-                    p=>p!==bowler
-                  ).map(p=>(
-                    <option key={p}>{p}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+        {matchEnded && (
+          <div className="bg-green-600 text-white text-center p-4 text-xl font-bold">
+            {resultText}
           </div>
         )}
 
