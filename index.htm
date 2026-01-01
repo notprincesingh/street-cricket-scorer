@@ -9,161 +9,162 @@
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 
 <body class="bg-gray-200">
 <div id="root"></div>
 
 <script type="text/babel">
-const { jsPDF } = window.jspdf;
-
 function App() {
-  /* ===== SERIES ===== */
-  const [seriesType, setSeriesType] = React.useState("single"); // single | bo3 | bo5
-  const [series, setSeries] = React.useState(
-    JSON.parse(localStorage.getItem("series")) || { A:0, B:0, played:0 }
-  );
-
-  /* ===== MATCH ===== */
+  /* ===== SETUP ===== */
   const [screen, setScreen] = React.useState("setup");
+
   const [teamA, setTeamA] = React.useState("Team A");
   const [teamB, setTeamB] = React.useState("Team B");
   const [squadA, setSquadA] = React.useState(["","",""]);
   const [squadB, setSquadB] = React.useState(["","",""]);
 
-  const [innings, setInnings] = React.useState(1);
-  const [target, setTarget] = React.useState(null);
-  const maxOvers = 2; // street cricket demo
+  /* ===== TOSS ===== */
+  const [tossWinner, setTossWinner] = React.useState(null);
+  const [tossDecision, setTossDecision] = React.useState(null);
 
+  /* ===== PLAYERS ===== */
+  const [battingTeam, setBattingTeam] = React.useState(null);
+  const [bowlingTeam, setBowlingTeam] = React.useState(null);
+
+  const [striker, setStriker] = React.useState("");
+  const [nonStriker, setNonStriker] = React.useState("");
+  const [bowler, setBowler] = React.useState("");
+
+  /* ===== MATCH ===== */
   const [runs, setRuns] = React.useState(0);
   const [balls, setBalls] = React.useState(0);
   const [wickets, setWickets] = React.useState(0);
 
-  const [striker, setStriker] = React.useState("");
-  const [nonStriker, setNonStriker] = React.useState("");
-
-  /* ===== PARTNERSHIP ===== */
-  const [pRuns, setPRuns] = React.useState(0);
-  const [pBalls, setPBalls] = React.useState(0);
-
   /* ===== MODALS ===== */
-  const [showNB, setShowNB] = React.useState(false);
-  const [showOut, setShowOut] = React.useState(false);
+  const [showWicket, setShowWicket] = React.useState(false);
+  const [wicketType, setWicketType] = React.useState(null);
 
-  const overs = Math.floor(balls/6) + balls%6/10;
-  const oversLeft = maxOvers - overs;
-  const reqRR = innings === 2 && oversLeft > 0
-    ? ((target - runs) / oversLeft).toFixed(2)
-    : null;
+  const overs = `${Math.floor(balls/6)}.${balls%6}`;
 
-  function swapStrike() {
-    setStriker(nonStriker);
-    setNonStriker(striker);
+  function doToss() {
+    const winner = Math.random() < 0.5 ? teamA : teamB;
+    setTossWinner(winner);
+  }
+
+  function decide(choice) {
+    setTossDecision(choice);
+    if (choice === "Bat") {
+      setBattingTeam(tossWinner);
+      setBowlingTeam(tossWinner === teamA ? teamB : teamA);
+    } else {
+      setBattingTeam(tossWinner === teamA ? teamB : teamA);
+      setBowlingTeam(tossWinner);
+    }
+  }
+
+  function startMatch() {
+    setScreen("scoring");
   }
 
   function scoreRun(r) {
     setRuns(runs + r);
     setBalls(balls + 1);
-    setPRuns(pRuns + r);
-    setPBalls(pBalls + 1);
-    if (r % 2 === 1) swapStrike();
-    if ((balls + 1) % 6 === 0) swapStrike();
-  }
-
-  function noBall(extra) {
-    setRuns(runs + 1 + extra);
-    setPRuns(pRuns + extra);
-    if (extra % 2 === 1) swapStrike();
-    setShowNB(false);
-  }
-
-  function wicket() {
-    setWickets(wickets + 1);
-    setBalls(balls + 1);
-    setPRuns(0);
-    setPBalls(0);
-    setStriker("New Batsman");
-    setShowOut(false);
-  }
-
-  function endInnings() {
-    if (innings === 1) {
-      setTarget(runs + 1);
-      setRuns(0);
-      setBalls(0);
-      setWickets(0);
-      setInnings(2);
-      setStriker(squadB[0]);
-      setNonStriker(squadB[1]);
-      setPRuns(0);
-      setPBalls(0);
-    } else {
-      finishMatch();
+    if (r % 2 === 1) {
+      setStriker(nonStriker);
+      setNonStriker(striker);
     }
   }
 
-  function finishMatch() {
-    const winner =
-      runs >= target ? "B" : "A";
-
-    const updated = {
-      ...series,
-      [winner]: series[winner] + 1,
-      played: series.played + 1
-    };
-    setSeries(updated);
-    localStorage.setItem("series", JSON.stringify(updated));
-    setScreen("setup");
+  function recordWicket(detail) {
+    setWickets(wickets + 1);
+    setBalls(balls + 1);
+    alert(`Wicket: ${detail}`);
+    setStriker("New Batsman");
+    setShowWicket(false);
   }
 
-  /* ===== SETUP ===== */
+  /* ===== SETUP SCREEN ===== */
   if (screen === "setup") {
     return (
       <div className="min-h-screen flex justify-center">
         <div className="w-full max-w-md bg-white p-4 space-y-4">
-          <h1 className="text-xl font-bold text-center">Start Match</h1>
 
-          <select className="border p-2 w-full"
-            value={seriesType}
-            onChange={e=>setSeriesType(e.target.value)}>
-            <option value="single">Single Match</option>
-            <option value="bo3">Best of 3</option>
-            <option value="bo5">Best of 5</option>
-          </select>
-
-          <p className="text-sm text-gray-600 text-center">
-            Series: {teamA} {series.A} – {series.B} {teamB}
-          </p>
+          <h1 className="text-xl font-bold text-center">Match Setup</h1>
 
           <input className="border p-2 w-full" value={teamA} onChange={e=>setTeamA(e.target.value)} />
           {squadA.map((p,i)=>(
             <input key={i} className="border p-2 w-full"
-              placeholder={`A Player ${i+1}`}
+              placeholder={`Team A Player ${i+1}`}
               value={p}
-              onChange={e=>{const c=[...squadA];c[i]=e.target.value;setSquadA(c);}} />
+              onChange={e=>{
+                const c=[...squadA]; c[i]=e.target.value; setSquadA(c);
+              }} />
           ))}
 
           <input className="border p-2 w-full" value={teamB} onChange={e=>setTeamB(e.target.value)} />
           {squadB.map((p,i)=>(
             <input key={i} className="border p-2 w-full"
-              placeholder={`B Player ${i+1}`}
+              placeholder={`Team B Player ${i+1}`}
               value={p}
-              onChange={e=>{const c=[...squadB];c[i]=e.target.value;setSquadB(c);}} />
+              onChange={e=>{
+                const c=[...squadB]; c[i]=e.target.value; setSquadB(c);
+              }} />
           ))}
 
-          <button className="w-full bg-teal-600 text-white py-2"
-            onClick={()=>{
-              setStriker(squadA[0]);
-              setNonStriker(squadA[1]);
-              setRuns(0); setBalls(0); setWickets(0);
-              setPRuns(0); setPBalls(0);
-              setInnings(1);
-              setTarget(null);
-              setScreen("scoring");
-            }}>
-            Start Match
-          </button>
+          {!tossWinner && (
+            <button onClick={doToss}
+              className="w-full bg-blue-600 text-white py-2">
+              Toss
+            </button>
+          )}
+
+          {tossWinner && !tossDecision && (
+            <div>
+              <p className="text-center font-semibold mb-2">
+                {tossWinner} won the toss
+              </p>
+              <button onClick={()=>decide("Bat")}
+                className="w-full bg-green-600 text-white py-2 mb-2">
+                Bat
+              </button>
+              <button onClick={()=>decide("Bowl")}
+                className="w-full bg-red-600 text-white py-2">
+                Bowl
+              </button>
+            </div>
+          )}
+
+          {battingTeam && (
+            <div className="space-y-2">
+              <select className="border p-2 w-full" onChange={e=>setStriker(e.target.value)}>
+                <option>Select Striker</option>
+                {(battingTeam===teamA?squadA:squadB).map(p=>(
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+
+              <select className="border p-2 w-full" onChange={e=>setNonStriker(e.target.value)}>
+                <option>Select Non-Striker</option>
+                {(battingTeam===teamA?squadA:squadB).filter(p=>p!==striker).map(p=>(
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+
+              <select className="border p-2 w-full" onChange={e=>setBowler(e.target.value)}>
+                <option>Select Bowler</option>
+                {(bowlingTeam===teamA?squadA:squadB).map(p=>(
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+
+              <button onClick={startMatch}
+                className="w-full bg-teal-600 text-white py-2">
+                Start Match
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
     );
@@ -175,22 +176,18 @@ function App() {
       <div className="w-full max-w-md">
 
         <div className="bg-red-600 p-3 text-center">
-          Innings {innings} {target && `(Target ${target})`}
+          {battingTeam} Batting
         </div>
 
         <div className="p-4 text-center bg-gray-900">
           <h2 className="text-4xl">{runs}/{wickets}</h2>
-          <p className="text-sm text-gray-400">
-            Overs: {overs.toFixed(1)}
-          </p>
-          <p className="text-sm text-green-400">
-            Partnership: {pRuns} ({pBalls} balls)
-          </p>
-          {reqRR && (
-            <p className="text-sm text-yellow-400">
-              Req RR: {reqRR}
-            </p>
-          )}
+          <p className="text-sm">Overs {overs}</p>
+        </div>
+
+        <div className="bg-gray-800 p-3 flex justify-between">
+          <span className="text-green-400">🏏 {striker}</span>
+          <span>{nonStriker}</span>
+          <span>🎯 {bowler}</span>
         </div>
 
         <div className="grid grid-cols-3 bg-white text-black">
@@ -200,37 +197,36 @@ function App() {
               {r===4?"FOUR":r===6?"SIX":r}
             </button>
           ))}
-          <button onClick={()=>setShowNB(true)}
-            className="py-6 border bg-green-500 text-white">NB</button>
-          <button onClick={()=>setShowOut(true)}
-            className="py-6 border bg-red-500 text-white">OUT</button>
+          <button onClick={()=>setShowWicket(true)}
+            className="py-6 border bg-red-500 text-white">
+            OUT
+          </button>
         </div>
 
-        {showNB && (
+        {showWicket && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
-            <div className="bg-white p-4">
-              {[0,1,2,3,4,6].map(r=>(
-                <button key={r} onClick={()=>noBall(r)}
-                  className="m-1 px-3 py-2 border">{r}</button>
-              ))}
+            <div className="bg-white p-4 space-y-2 text-black">
+              <button onClick={()=>recordWicket("Bowled")}
+                className="w-full border py-2">Bowled</button>
+              <button onClick={()=>setWicketType("Caught")}
+                className="w-full border py-2">Caught</button>
+              <button onClick={()=>setWicketType("Run Out")}
+                className="w-full border py-2">Run Out</button>
+
+              {wicketType && (
+                <select className="border p-2 w-full"
+                  onChange={e=>recordWicket(`${wicketType} by ${e.target.value}`)}>
+                  <option>Select Fielder</option>
+                  {(bowlingTeam===teamA?squadA:squadB).filter(
+                    p=>p!==bowler
+                  ).map(p=>(
+                    <option key={p}>{p}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         )}
-
-        {showOut && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
-            <div className="bg-white p-4">
-              <button onClick={wicket} className="w-full border py-2">
-                Wicket
-              </button>
-            </div>
-          </div>
-        )}
-
-        <button onClick={endInnings}
-          className="w-full py-3 bg-blue-600 mt-2">
-          End Innings / Match
-        </button>
 
       </div>
     </div>
