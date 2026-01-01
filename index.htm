@@ -5,68 +5,77 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Street Cricket Scorer</title>
 
-<!-- version: 2026-01-04 -->
+<!-- version: 2026-01-06 -->
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 
 <body class="bg-gray-200">
 <div id="root"></div>
 
 <script type="text/babel">
-function App() {
+const { jsPDF } = window.jspdf;
 
-  /* ================= MATCH RULES ================= */
-  const MAX_OVERS = 15;
-  const MAX_BALLS = MAX_OVERS * 6; // 90
+const MATCH_KEY = "sc_match";
+const CAREER_KEY = "sc_career";
+
+function App() {
+  /* ================= LOAD ================= */
+  const saved = JSON.parse(localStorage.getItem(MATCH_KEY));
+  const career = JSON.parse(localStorage.getItem(CAREER_KEY)) || {};
+
+  /* ================= RULES ================= */
+  const MAX_BALLS = 90;
   const MAX_WICKETS = 2;
 
   /* ================= CORE ================= */
-  const [screen, setScreen] = React.useState("setup");
-  const [day, setDay] = React.useState(1);
-  const [dayEnded, setDayEnded] = React.useState(false);
+  const [screen, setScreen] = React.useState(saved ? "scoring" : "setup");
+  const [teamA, setTeamA] = React.useState(saved?.teamA || "Team A");
+  const [teamB, setTeamB] = React.useState(saved?.teamB || "Team B");
+  const [squadA, setSquadA] = React.useState(saved?.squadA || ["","",""]);
+  const [squadB, setSquadB] = React.useState(saved?.squadB || ["","",""]);
 
-  /* ================= TEAMS ================= */
-  const [teamA, setTeamA] = React.useState("Team A");
-  const [teamB, setTeamB] = React.useState("Team B");
-  const [squadA, setSquadA] = React.useState(["","",""]);
-  const [squadB, setSquadB] = React.useState(["","",""]);
+  const [tossWinner, setTossWinner] = React.useState(saved?.tossWinner || null);
+  const [tossDecision, setTossDecision] = React.useState(saved?.tossDecision || null);
 
-  /* ================= TOSS ================= */
-  const [tossWinner, setTossWinner] = React.useState(null);
-  const [tossDecision, setTossDecision] = React.useState(null);
-  const [battingTeam, setBattingTeam] = React.useState(null);
-  const [bowlingTeam, setBowlingTeam] = React.useState(null);
+  const [innings, setInnings] = React.useState(saved?.innings || 1);
+  const [firstInningsScore, setFirstInningsScore] = React.useState(saved?.firstInningsScore || null);
 
-  /* ================= INNINGS ================= */
-  const [innings, setInnings] = React.useState(1);
-  const [firstInningsScore, setFirstInningsScore] = React.useState(null);
+  const [runs, setRuns] = React.useState(saved?.runs || 0);
+  const [balls, setBalls] = React.useState(saved?.balls || 0);
+  const [wickets, setWickets] = React.useState(saved?.wickets || 0);
 
-  /* ================= SCORE ================= */
-  const [runs, setRuns] = React.useState(0);
-  const [balls, setBalls] = React.useState(0);
-  const [wickets, setWickets] = React.useState(0);
+  const [battingTeam, setBattingTeam] = React.useState(saved?.battingTeam || null);
+  const [bowlingTeam, setBowlingTeam] = React.useState(saved?.bowlingTeam || null);
 
-  const [striker, setStriker] = React.useState("");
-  const [nonStriker, setNonStriker] = React.useState("");
-  const [bowler, setBowler] = React.useState("");
+  const [matchEnded, setMatchEnded] = React.useState(saved?.matchEnded || false);
+  const [resultText, setResultText] = React.useState(saved?.resultText || "");
 
-  /* ================= MATCH END ================= */
-  const [matchEnded, setMatchEnded] = React.useState(false);
-  const [resultText, setResultText] = React.useState("");
+  /* ================= SAVE ================= */
+  React.useEffect(() => {
+    localStorage.setItem(MATCH_KEY, JSON.stringify({
+      teamA, teamB, squadA, squadB,
+      tossWinner, tossDecision,
+      innings, firstInningsScore,
+      runs, balls, wickets,
+      battingTeam, bowlingTeam,
+      matchEnded, resultText
+    }));
+  }, [
+    teamA, teamB, squadA, squadB,
+    tossWinner, tossDecision,
+    innings, firstInningsScore,
+    runs, balls, wickets,
+    battingTeam, bowlingTeam,
+    matchEnded, resultText
+  ]);
 
-  const overs = `${Math.floor(balls/6)}.${balls%6}`;
-
-  /* ================= HELPERS ================= */
-  function swapStrike() {
-    setStriker(nonStriker);
-    setNonStriker(striker);
-  }
-
-  function doToss() {
+  /* ================= LOGIC ================= */
+  function toss() {
     setTossWinner(Math.random() < 0.5 ? teamA : teamB);
   }
 
@@ -81,11 +90,9 @@ function App() {
     }
   }
 
-  /* ================= SCORING ================= */
-  function scoreRun(r) {
-    if (dayEnded || matchEnded) return;
-    if (balls >= MAX_BALLS) return;
-    if (wickets >= MAX_WICKETS) return;
+  function score(r) {
+    if (matchEnded) return;
+    if (balls >= MAX_BALLS || wickets >= MAX_WICKETS) return;
 
     const newRuns = runs + r;
     const newBalls = balls + 1;
@@ -93,204 +100,116 @@ function App() {
     setRuns(newRuns);
     setBalls(newBalls);
 
-    if (r % 2 === 1) swapStrike();
-
-    if (newBalls % 6 === 0) swapStrike();
-
-    // Chase completed
     if (innings === 2 && newRuns > firstInningsScore) {
-      decideResult(newRuns);
+      endMatch(newRuns);
     }
 
-    // Overs completed
-    if (newBalls >= MAX_BALLS) {
-      endInnings();
-    }
+    if (newBalls >= MAX_BALLS) endInnings();
   }
 
-  function wicket() {
-    if (dayEnded || matchEnded) return;
-    if (wickets >= MAX_WICKETS) return;
-
-    const newWickets = wickets + 1;
-    const newBalls = balls + 1;
-
-    setWickets(newWickets);
-    setBalls(newBalls);
-    setStriker("New Batsman");
-
-    if (newWickets >= MAX_WICKETS) {
-      endInnings();
-    }
+  function out() {
+    if (matchEnded) return;
+    const w = wickets + 1;
+    setWickets(w);
+    setBalls(balls + 1);
+    if (w >= MAX_WICKETS) endInnings();
   }
 
-  /* ================= INNINGS END ================= */
   function endInnings() {
-    setDayEnded(true);
-
     if (innings === 1) {
       setFirstInningsScore(runs);
-
-      setTimeout(() => {
-        setInnings(2);
-        setRuns(0);
-        setBalls(0);
-        setWickets(0);
-        setDayEnded(false);
-
-        // Swap teams
-        setBattingTeam(bowlingTeam);
-        setBowlingTeam(battingTeam);
-
-        const nextBat = bowlingTeam === teamA ? squadA : squadB;
-        const nextBowl = battingTeam === teamA ? squadA : squadB;
-
-        setStriker(nextBat[0]);
-        setNonStriker(nextBat[1]);
-        setBowler(nextBowl[0]);
-      }, 500);
-
+      setRuns(0);
+      setBalls(0);
+      setWickets(0);
+      setInnings(2);
+      setBattingTeam(bowlingTeam);
+      setBowlingTeam(battingTeam);
     } else {
-      decideResult(runs);
+      endMatch(runs);
     }
   }
 
-  /* ================= RESULT ================= */
-  function decideResult(finalRuns) {
+  function endMatch(finalRuns) {
     setMatchEnded(true);
-
-    if (finalRuns > firstInningsScore) {
-      setResultText(`${battingTeam} won the match`);
-    } else if (finalRuns < firstInningsScore) {
-      setResultText(`${bowlingTeam} won the match`);
-    } else {
-      setResultText("Match Drawn");
-    }
+    let res =
+      finalRuns > firstInningsScore
+        ? `${battingTeam} won`
+        : finalRuns < firstInningsScore
+        ? `${bowlingTeam} won`
+        : "Match Drawn";
+    setResultText(res);
+    updateCareer(finalRuns);
   }
 
-  /* ================= SETUP ================= */
+  function updateCareer(finalRuns) {
+    const updated = { ...career };
+    const team = battingTeam === teamA ? squadA : squadB;
+    team.forEach(p => {
+      if (!p) return;
+      if (!updated[p]) updated[p] = { runs: 0, balls: 0, matches: 0 };
+      updated[p].runs += finalRuns;
+      updated[p].matches += 1;
+    });
+    localStorage.setItem(CAREER_KEY, JSON.stringify(updated));
+  }
+
+  function pdf() {
+    const d = new jsPDF();
+    d.text(`${teamA} vs ${teamB}`, 10, 10);
+    d.text(`Toss: ${tossWinner} chose ${tossDecision}`, 10, 20);
+    d.text(`Innings 1: ${firstInningsScore}`, 10, 30);
+    d.text(`Innings 2: ${runs}`, 10, 40);
+    d.text(`Result: ${resultText}`, 10, 50);
+    d.save("match-summary.pdf");
+  }
+
+  /* ================= UI ================= */
   if (screen === "setup") {
     return (
-      <div className="min-h-screen flex justify-center">
-        <div className="w-full max-w-md bg-white p-4 space-y-4">
-          <h1 className="text-xl font-bold text-center">Match Setup</h1>
-
-          <input className="border p-2 w-full" value={teamA} onChange={e=>setTeamA(e.target.value)} />
-          {squadA.map((p,i)=>(
-            <input key={i} className="border p-2 w-full"
-              placeholder={`Team A Player ${i+1}`}
-              value={p}
-              onChange={e=>{const c=[...squadA];c[i]=e.target.value;setSquadA(c);}} />
-          ))}
-
-          <input className="border p-2 w-full" value={teamB} onChange={e=>setTeamB(e.target.value)} />
-          {squadB.map((p,i)=>(
-            <input key={i} className="border p-2 w-full"
-              placeholder={`Team B Player ${i+1}`}
-              value={p}
-              onChange={e=>{const c=[...squadB];c[i]=e.target.value;setSquadB(c);}} />
-          ))}
-
-          {!tossWinner && (
-            <button onClick={doToss} className="w-full bg-blue-600 text-white py-2">
-              Toss
-            </button>
-          )}
-
-          {tossWinner && !tossDecision && (
-            <>
-              <p className="text-center font-semibold">{tossWinner} won the toss</p>
-              <button onClick={()=>decide("Bat")} className="w-full bg-green-600 text-white py-2">Bat</button>
-              <button onClick={()=>decide("Bowl")} className="w-full bg-red-600 text-white py-2">Bowl</button>
-            </>
-          )}
-
-          {battingTeam && (
-            <>
-              <select className="border p-2 w-full" onChange={e=>setStriker(e.target.value)}>
-                <option>Select Striker</option>
-                {(battingTeam===teamA?squadA:squadB).map(p=><option key={p}>{p}</option>)}
-              </select>
-
-              <select className="border p-2 w-full" onChange={e=>setNonStriker(e.target.value)}>
-                <option>Select Non-Striker</option>
-                {(battingTeam===teamA?squadA:squadB).filter(p=>p!==striker).map(p=><option key={p}>{p}</option>)}
-              </select>
-
-              <select className="border p-2 w-full" onChange={e=>setBowler(e.target.value)}>
-                <option>Select Bowler</option>
-                {(bowlingTeam===teamA?squadA:squadB).map(p=><option key={p}>{p}</option>)}
-              </select>
-
-              <button onClick={()=>setScreen("scoring")}
-                className="w-full bg-teal-600 text-white py-2">
-                Start Match
-              </button>
-            </>
-          )}
-        </div>
+      <div className="p-4 max-w-md mx-auto bg-white space-y-2">
+        <h1 className="font-bold text-center">Match Setup</h1>
+        <input value={teamA} onChange={e=>setTeamA(e.target.value)} className="border p-2 w-full"/>
+        {squadA.map((p,i)=>(
+          <input key={i} value={p} onChange={e=>{const c=[...squadA];c[i]=e.target.value;setSquadA(c);}}
+            className="border p-2 w-full" placeholder={`A${i+1}`}/>
+        ))}
+        <input value={teamB} onChange={e=>setTeamB(e.target.value)} className="border p-2 w-full"/>
+        {squadB.map((p,i)=>(
+          <input key={i} value={p} onChange={e=>{const c=[...squadB];c[i]=e.target.value;setSquadB(c);}}
+            className="border p-2 w-full" placeholder={`B${i+1}`}/>
+        ))}
+        {!tossWinner && <button onClick={toss} className="bg-blue-600 text-white w-full py-2">Toss</button>}
+        {tossWinner && !tossDecision && (
+          <>
+            <p className="text-center">{tossWinner} won toss</p>
+            <button onClick={()=>decide("Bat")} className="bg-green-600 text-white w-full py-2">Bat</button>
+            <button onClick={()=>decide("Bowl")} className="bg-red-600 text-white w-full py-2">Bowl</button>
+          </>
+        )}
+        {battingTeam && <button onClick={()=>setScreen("scoring")} className="bg-black text-white w-full py-2">Start</button>}
       </div>
     );
   }
 
-  /* ================= SCORING ================= */
   return (
-    <div className="min-h-screen bg-black text-white flex justify-center">
-      <div className="w-full max-w-md">
-
-        <div className="bg-red-600 p-3 text-center">
-          Day {day} · Innings {innings}
-          {innings === 2 && firstInningsScore !== null && (
-            <div className="text-sm">Target {firstInningsScore + 1}</div>
-          )}
-        </div>
-
-        <div className="p-4 text-center bg-gray-900">
-          <h2 className="text-4xl">{runs}/{wickets}</h2>
-          <p className="text-sm">Overs {overs}</p>
-        </div>
-
-        <div className="bg-gray-800 p-3 flex justify-between">
-          <span className="text-green-400">🏏 {striker}</span>
-          <span>{nonStriker}</span>
-          <span>🎯 {bowler}</span>
-        </div>
-
-        <div className="grid grid-cols-3 bg-white text-black">
-          {[0,1,2,3,4,6].map(r=>(
-            <button key={r}
-              disabled={dayEnded || matchEnded}
-              onClick={()=>scoreRun(r)}
-              className="py-6 border text-xl font-bold disabled:bg-gray-300">
-              {r===4?"FOUR":r===6?"SIX":r}
-            </button>
-          ))}
-          <button disabled={dayEnded || matchEnded}
-            onClick={wicket}
-            className="py-6 border bg-red-500 text-white disabled:bg-gray-400">
-            OUT
-          </button>
-        </div>
-
-        {!dayEnded && !matchEnded ? (
-          <button onClick={()=>setDayEnded(true)}
-            className="w-full py-3 bg-yellow-600 font-semibold">
-            End Day
-          </button>
-        ) : dayEnded && !matchEnded ? (
-          <button onClick={()=>{setDay(day+1);setDayEnded(false);}}
-            className="w-full py-3 bg-green-600 font-semibold">
-            Start Day {day+1}
-          </button>
-        ) : null}
-
-        {matchEnded && (
-          <div className="bg-green-600 text-white text-center p-4 text-xl font-bold">
-            {resultText}
-          </div>
-        )}
-
+    <div className="p-4 bg-black text-white min-h-screen">
+      <h2 className="text-center text-2xl">{runs}/{wickets}</h2>
+      <div className="grid grid-cols-3 bg-white text-black">
+        {[0,1,2,3,4,6].map(r=>(
+          <button key={r} onClick={()=>score(r)} className="py-6 border">{r}</button>
+        ))}
+        <button onClick={out} className="bg-red-500 text-white py-6">OUT</button>
       </div>
+
+      {matchEnded && (
+        <>
+          <div className="bg-green-600 text-center p-2 mt-2">{resultText}</div>
+          <button onClick={pdf} className="bg-blue-600 w-full py-2 mt-2">Download PDF</button>
+        </>
+      )}
+
+      <button onClick={()=>{localStorage.clear();location.reload();}}
+        className="bg-red-800 w-full py-2 mt-2">Reset</button>
     </div>
   );
 }
