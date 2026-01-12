@@ -1,118 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Street Cricket Scorer</title>
-
-<!-- version: 2026-01-06 -->
-
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Korba Gully Test - Phone Edition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body { touch-action: manipulation; } /* Better touch response on mobile */
+    input, button { -webkit-tap-highlight-color: transparent; }
+  </style>
 </head>
+<body class="bg-gradient-to-b from-gray-900 to-black text-white min-h-screen">
 
-<body class="bg-gray-200">
 <div id="root"></div>
 
 <script type="text/babel">
 const { jsPDF } = window.jspdf;
-
-const MATCH_KEY = "sc_match";
-const CAREER_KEY = "sc_career";
+const MATCH_KEY = "korba_gully_test_phone_destroy_raigarh";
 
 function App() {
-  /* ================= LOAD ================= */
   const saved = JSON.parse(localStorage.getItem(MATCH_KEY));
-  const career = JSON.parse(localStorage.getItem(CAREER_KEY)) || {};
 
-  /* ================= RULES ================= */
   const MAX_BALLS = 90;
-  const MAX_WICKETS = 2;
+  const MAX_WICKETS = 3;
 
-  /* ================= CORE ================= */
   const [screen, setScreen] = React.useState(saved ? "scoring" : "setup");
-  const [teamA, setTeamA] = React.useState(saved?.teamA || "Team A");
-  const [teamB, setTeamB] = React.useState(saved?.teamB || "Team B");
+  const [teamA, setTeamA] = React.useState(saved?.teamA || "Korba Volt Kings");
+  const [teamB, setTeamB] = React.useState(saved?.teamB || "Raigarh Coal Losers");
   const [squadA, setSquadA] = React.useState(saved?.squadA || ["","",""]);
   const [squadB, setSquadB] = React.useState(saved?.squadB || ["","",""]);
-
-  const [tossWinner, setTossWinner] = React.useState(saved?.tossWinner || null);
-  const [tossDecision, setTossDecision] = React.useState(saved?.tossDecision || null);
-
+  const [battingTeam, setBattingTeam] = React.useState(saved?.battingTeam || null);
+  const [bowlingTeam, setBowlingTeam] = React.useState(saved?.bowlingTeam || null);
   const [innings, setInnings] = React.useState(saved?.innings || 1);
   const [firstInningsScore, setFirstInningsScore] = React.useState(saved?.firstInningsScore || null);
-
   const [runs, setRuns] = React.useState(saved?.runs || 0);
   const [balls, setBalls] = React.useState(saved?.balls || 0);
   const [wickets, setWickets] = React.useState(saved?.wickets || 0);
-
-  const [battingTeam, setBattingTeam] = React.useState(saved?.battingTeam || null);
-  const [bowlingTeam, setBowlingTeam] = React.useState(saved?.bowlingTeam || null);
-
   const [matchEnded, setMatchEnded] = React.useState(saved?.matchEnded || false);
   const [resultText, setResultText] = React.useState(saved?.resultText || "");
+  const [wicketHistory, setWicketHistory] = React.useState(saved?.wicketHistory || []);
 
-  /* ================= SAVE ================= */
   React.useEffect(() => {
     localStorage.setItem(MATCH_KEY, JSON.stringify({
-      teamA, teamB, squadA, squadB,
-      tossWinner, tossDecision,
-      innings, firstInningsScore,
-      runs, balls, wickets,
-      battingTeam, bowlingTeam,
-      matchEnded, resultText
+      teamA, teamB, squadA, squadB, battingTeam, bowlingTeam,
+      innings, firstInningsScore, runs, balls, wickets,
+      matchEnded, resultText, wicketHistory
     }));
-  }, [
-    teamA, teamB, squadA, squadB,
-    tossWinner, tossDecision,
-    innings, firstInningsScore,
-    runs, balls, wickets,
-    battingTeam, bowlingTeam,
-    matchEnded, resultText
-  ]);
+  }, [teamA, teamB, squadA, squadB, battingTeam, bowlingTeam, innings, firstInningsScore,
+      runs, balls, wickets, matchEnded, resultText, wicketHistory]);
 
-  /* ================= LOGIC ================= */
-  function toss() {
-    setTossWinner(Math.random() < 0.5 ? teamA : teamB);
-  }
+  const howOuts = ["Caught", "Bowled", "Run Out", "Hit Wicket", "LBW", "Stumped", "Others"];
 
-  function decide(choice) {
-    setTossDecision(choice);
-    if (choice === "Bat") {
-      setBattingTeam(tossWinner);
-      setBowlingTeam(tossWinner === teamA ? teamB : teamA);
-    } else {
-      setBattingTeam(tossWinner === teamA ? teamB : teamA);
-      setBowlingTeam(tossWinner);
-    }
+  function askWicketDetails() {
+    const batsman = prompt(`Kaun out hua? (1,2,3)\n1: ${(battingTeam === teamA ? squadA[0] : squadB[0]) || "Player 1"}\n2: ${(battingTeam === teamA ? squadA[1] : squadB[1]) || "Player 2"}\n3: ${(battingTeam === teamA ? squadA[2] : squadB[2]) || "Player 3"}`, "1");
+    const how = prompt(`Kaise out? (number)\n${howOuts.map((m,i)=>`${i+1}: ${m}`).join("\n")}`, "1");
+
+    const playerNum = parseInt(batsman||1) - 1;
+    const playerName = (battingTeam === teamA ? squadA : squadB)[playerNum] || `Player ${playerNum+1}`;
+    const dismissal = howOuts[parseInt(how||1)-1] || "Mystery";
+
+    const entry = `${Math.floor(balls/6)}.${balls%6} ov → ${playerName} ${dismissal} (${runs} tak)`;
+    setWicketHistory(prev => [...prev, entry]);
   }
 
   function score(r) {
-    if (matchEnded) return;
-    if (balls >= MAX_BALLS || wickets >= MAX_WICKETS) return;
-
+    if (matchEnded || balls >= MAX_BALLS || wickets >= MAX_WICKETS) return;
     const newRuns = runs + r;
-    const newBalls = balls + 1;
-
     setRuns(newRuns);
-    setBalls(newBalls);
+    setBalls(balls + 1);
 
-    if (innings === 2 && newRuns > firstInningsScore) {
-      endMatch(newRuns);
-    }
-
-    if (newBalls >= MAX_BALLS) endInnings();
+    if (r === 6) alert("CHHAKKKAAAAA! ⚡ Power plant jealous ho gaya!");
+    if (innings === 2 && newRuns > firstInningsScore) endMatch(newRuns);
+    if (balls + 1 >= MAX_BALLS) endInnings();
   }
 
   function out() {
-    if (matchEnded) return;
-    const w = wickets + 1;
-    setWickets(w);
+    if (matchEnded || wickets >= MAX_WICKETS) return;
+    const newW = wickets + 1;
+    setWickets(newW);
     setBalls(balls + 1);
-    if (w >= MAX_WICKETS) endInnings();
+    askWicketDetails();
+    if (newW >= MAX_WICKETS) endInnings();
   }
 
   function endInnings() {
@@ -121,9 +93,11 @@ function App() {
       setRuns(0);
       setBalls(0);
       setWickets(0);
+      setWicketHistory([]);
       setInnings(2);
+      const temp = battingTeam;
       setBattingTeam(bowlingTeam);
-      setBowlingTeam(battingTeam);
+      setBowlingTeam(temp);
     } else {
       endMatch(runs);
     }
@@ -131,85 +105,136 @@ function App() {
 
   function endMatch(finalRuns) {
     setMatchEnded(true);
-    let res =
-      finalRuns > firstInningsScore
-        ? `${battingTeam} won`
-        : finalRuns < firstInningsScore
-        ? `${bowlingTeam} won`
-        : "Match Drawn";
+    let res = finalRuns > firstInningsScore ? `${battingTeam} ne pel diya bhai!`
+             : finalRuns < firstInningsScore ? `${bowlingTeam} ne bacha liya match`
+             : "Draw? Tum log 15 over khel ke draw kar rahe ho? 😂";
     setResultText(res);
-    updateCareer(finalRuns);
   }
 
-  function updateCareer(finalRuns) {
-    const updated = { ...career };
-    const team = battingTeam === teamA ? squadA : squadB;
-    team.forEach(p => {
-      if (!p) return;
-      if (!updated[p]) updated[p] = { runs: 0, balls: 0, matches: 0 };
-      updated[p].runs += finalRuns;
-      updated[p].matches += 1;
+  function generatePDF() {
+    const doc = new jsPDF();
+    let y = 15;
+    doc.setFontSize(18);
+    doc.text("Korba Gully Test", 105, y, { align: "center" }); y += 12;
+    doc.setFontSize(14);
+    doc.text(`${teamA} vs ${teamB}`, 105, y, { align: "center" }); y += 10;
+    doc.setFontSize(11);
+    doc.text(`Batting first: ${battingTeam || "?"}`, 20, y); y += 8;
+    doc.text(`Innings 1: ${firstInningsScore ?? "-"} (${Math.floor((firstInningsScore ? 90 : balls)/6)}.${(firstInningsScore ? 90 : balls)%6})`, 20, y); y += 8;
+    doc.text(`Innings 2: ${runs}/${wickets}   (${Math.floor(balls/6)}.${balls%6})`, 20, y); y += 12;
+    doc.setFontSize(13);
+    doc.text("Wickets:", 20, y); y += 10;
+    doc.setFontSize(10);
+    wicketHistory.forEach((w,i) => {
+      doc.text(`${i+1}. ${w}`, 25, y);
+      y += 7;
     });
-    localStorage.setItem(CAREER_KEY, JSON.stringify(updated));
+    if (!wicketHistory.length) doc.text("No wickets... batting gods", 25, y);
+    y += 12;
+    doc.setFontSize(14);
+    doc.text(resultText || "Match chal raha hai...", 105, y, { align: "center" });
+    doc.save(`korba_gully_${new Date().toISOString().slice(0,10)}.pdf`);
   }
 
-  function pdf() {
-    const d = new jsPDF();
-    d.text(`${teamA} vs ${teamB}`, 10, 10);
-    d.text(`Toss: ${tossWinner} chose ${tossDecision}`, 10, 20);
-    d.text(`Innings 1: ${firstInningsScore}`, 10, 30);
-    d.text(`Innings 2: ${runs}`, 10, 40);
-    d.text(`Result: ${resultText}`, 10, 50);
-    d.save("match-summary.pdf");
-  }
-
-  /* ================= UI ================= */
   if (screen === "setup") {
     return (
-      <div className="p-4 max-w-md mx-auto bg-white space-y-2">
-        <h1 className="font-bold text-center">Match Setup</h1>
-        <input value={teamA} onChange={e=>setTeamA(e.target.value)} className="border p-2 w-full"/>
-        {squadA.map((p,i)=>(
-          <input key={i} value={p} onChange={e=>{const c=[...squadA];c[i]=e.target.value;setSquadA(c);}}
-            className="border p-2 w-full" placeholder={`A${i+1}`}/>
-        ))}
-        <input value={teamB} onChange={e=>setTeamB(e.target.value)} className="border p-2 w-full"/>
-        {squadB.map((p,i)=>(
-          <input key={i} value={p} onChange={e=>{const c=[...squadB];c[i]=e.target.value;setSquadB(c);}}
-            className="border p-2 w-full" placeholder={`B${i+1}`}/>
-        ))}
-        {!tossWinner && <button onClick={toss} className="bg-blue-600 text-white w-full py-2">Toss</button>}
-        {tossWinner && !tossDecision && (
-          <>
-            <p className="text-center">{tossWinner} won toss</p>
-            <button onClick={()=>decide("Bat")} className="bg-green-600 text-white w-full py-2">Bat</button>
-            <button onClick={()=>decide("Bowl")} className="bg-red-600 text-white w-full py-2">Bowl</button>
-          </>
-        )}
-        {battingTeam && <button onClick={()=>setScreen("scoring")} className="bg-black text-white w-full py-2">Start</button>}
+      <div className="min-h-screen p-6 flex flex-col justify-center">
+        <h1 className="text-4xl md:text-5xl font-black text-yellow-400 text-center mb-10">KORBA GULLY TEST</h1>
+
+        <div className="space-y-8 max-w-md mx-auto w-full">
+          <div>
+            <label className="block text-xl mb-2">Team A (Your team? 😏)</label>
+            <input value={teamA} onChange={e=>setTeamA(e.target.value)}
+              className="w-full p-5 text-xl bg-gray-800 border-2 border-yellow-600 rounded-xl text-center" />
+            {squadA.map((p,i) => (
+              <input key={i} value={p} onChange={e=>{const c=[...squadA];c[i]=e.target.value;setSquadA(c);}}
+                className="w-full mt-3 p-4 text-lg bg-gray-800 rounded-lg" placeholder={`Player ${i+1}`} />
+            ))}
+          </div>
+
+          <div className="pt-6 border-t border-gray-700">
+            <label className="block text-xl mb-2">Team B (Raigarh waale? 😂)</label>
+            <input value={teamB} onChange={e=>setTeamB(e.target.value)}
+              className="w-full p-5 text-xl bg-gray-800 border-2 border-red-600 rounded-xl text-center" />
+            {squadB.map((p,i) => (
+              <input key={i} value={p} onChange={e=>{const c=[...squadB];c[i]=e.target.value;setSquadB(c);}}
+                className="w-full mt-3 p-4 text-lg bg-gray-800 rounded-lg" placeholder={`Player ${i+1}`} />
+            ))}
+          </div>
+
+          <div className="pt-8">
+            <label className="block text-2xl font-bold mb-4 text-center">Who won the toss?</label>
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <button onClick={()=>setBattingTeam(teamA); setBowlingTeam(teamB)}
+                className="py-6 text-xl font-bold bg-green-700 hover:bg-green-600 rounded-xl">
+                {teamA} won toss
+              </button>
+              <button onClick={()=>setBattingTeam(teamB); setBowlingTeam(teamA)}
+                className="py-6 text-xl font-bold bg-green-700 hover:bg-green-600 rounded-xl">
+                {teamB} won toss
+              </button>
+            </div>
+
+            {battingTeam && (
+              <>
+                <label className="block text-2xl font-bold mb-4 text-center">Who bats first?</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button onClick={()=>{setBattingTeam(teamA); setBowlingTeam(teamB); setScreen("scoring")}}
+                    className="py-8 text-2xl font-black bg-blue-700 hover:bg-blue-600 rounded-xl">
+                    {teamA} bats first
+                  </button>
+                  <button onClick={()=>{setBattingTeam(teamB); setBowlingTeam(teamA); setScreen("scoring")}}
+                    className="py-8 text-2xl font-black bg-blue-700 hover:bg-blue-600 rounded-xl">
+                    {teamB} bats first
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-black text-white min-h-screen">
-      <h2 className="text-center text-2xl">{runs}/{wickets}</h2>
-      <div className="grid grid-cols-3 bg-white text-black">
-        {[0,1,2,3,4,6].map(r=>(
-          <button key={r} onClick={()=>score(r)} className="py-6 border">{r}</button>
+    <div className="min-h-screen p-6">
+      <div className="text-center mb-10">
+        <h2 className="text-7xl font-black">{runs}/{wickets}</h2>
+        <p className="text-3xl mt-3">{Math.floor(balls/6)}.{balls%6} ov</p>
+        <p className="text-xl mt-2 opacity-80">{battingTeam} batting</p>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4 max-w-sm mx-auto">
+        {[0,1,2,3,4,6].map(r => (
+          <button key={r} onClick={()=>score(r)}
+            className="aspect-square bg-gray-800 hover:bg-gray-700 rounded-2xl text-5xl font-bold shadow-lg active:scale-95 transition-transform">
+            {r}
+          </button>
         ))}
-        <button onClick={out} className="bg-red-500 text-white py-6">OUT</button>
+        <button onClick={out}
+          className="col-span-2 bg-red-900 hover:bg-red-800 rounded-2xl text-5xl font-bold shadow-lg active:scale-95 transition-transform">
+          OUT
+        </button>
+      </div>
+
+      <div className="mt-12 space-y-6 max-w-sm mx-auto">
+        <button onClick={generatePDF}
+          className="w-full py-6 bg-blue-800 hover:bg-blue-700 rounded-xl text-2xl font-bold active:scale-95 transition-transform">
+          PDF Le Lo
+        </button>
+
+        <button 
+          onClick={()=>{if(confirm("Pura match mitana hai? Sach mein?")){localStorage.clear();location.reload();}}}
+          className="w-full py-6 bg-red-950 hover:bg-red-900 rounded-xl text-2xl font-bold active:scale-95 transition-transform">
+          Reset Sab Kuch
+        </button>
       </div>
 
       {matchEnded && (
-        <>
-          <div className="bg-green-600 text-center p-2 mt-2">{resultText}</div>
-          <button onClick={pdf} className="bg-blue-600 w-full py-2 mt-2">Download PDF</button>
-        </>
+        <div className="mt-12 text-center text-4xl font-black text-green-400 p-8 bg-green-900/30 rounded-2xl">
+          {resultText}
+        </div>
       )}
-
-      <button onClick={()=>{localStorage.clear();location.reload();}}
-        className="bg-red-800 w-full py-2 mt-2">Reset</button>
     </div>
   );
 }
